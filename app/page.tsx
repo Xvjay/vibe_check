@@ -1,11 +1,10 @@
 "use client";
 import { useState, useRef } from "react";
-import { database } from "../firebase";
-import { ref, set } from "firebase/database";
+import { addDoc, collection } from "firebase/firestore";
+import { db } from "./firebase"; // Adjust the import path as necessary
+import { url } from "inspector";
 
 export default function Home() {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -14,23 +13,29 @@ export default function Home() {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string); // cast here
+      reader.onload = () => resolve(reader.result as string);
       reader.onerror = (err) => reject(err);
     });
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!file) return alert("Please select a file first!");
     setStatus("Uploading...");
 
     try {
       const base64Image = await fileToBase64(file);
       setPreview(base64Image);
-      const imageRef = ref(database, `images/${Date.now()}`);
-
-      await set(imageRef, {
+      const imageRef = await addDoc(collection(db, `images`), {
         image: base64Image,
         uploadedAt: new Date().toISOString(),
+      });
+      const res = await fetch("/vibe_check", {
+        method: "POST",
+        body: JSON.stringify({ imageId: base64Image }),
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
       setStatus("Upload successful!");
     } catch (error) {
@@ -50,13 +55,26 @@ export default function Home() {
       </div>
 
       <div>
+        <label htmlFor="fileInput">Upload an image:</label>
         <input
+          id="fileInput"
           type="file"
           accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => {
+            const selectedFile = e.target.files?.[0];
+            if (selectedFile) {
+              setFile(selectedFile);
+              setPreview(URL.createObjectURL(selectedFile));
+            }
+          }}
         />
-
-        <button onClick={handleUpload}>Upload</button>
+        <button
+          type="button"
+          className="text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:hover:bg-gray-700 dark:focus:ring-gray-700 dark:border-gray-700"
+          onClick={handleUpload}
+        >
+          Upload
+        </button>
         <p>{status}</p>
         {preview && <img src={preview} width={200} alt="Preview" />}
       </div>
